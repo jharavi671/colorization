@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Image Colorizer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+      background-color: #f0f2f5;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    .form-section, .edit-section, .btn-section {
+      margin-top: 30px;
+    }
+    .img-preview {
+      margin-top: 20px;
+      max-width: 100%;
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    .slider {
+      width: 300px;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+    }
+    button {
+      margin-top: 15px;
+      padding: 10px 20px;
+      font-size: 1rem;
+      cursor: pointer;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+    .btn-secondary {
+      background-color: #2ecc71;
+      margin-left: 10px;
+    }
+
+    /* Spinner */
+    .overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(255, 255, 255, 0.6);
+      z-index: 999;
+    }
+    #spinner {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .spinner-border {
+      width: 3rem;
+      height: 3rem;
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>🎨 Upload a Grayscale Image to Colorize</h1>
+  <form method="POST" enctype="multipart/form-data" onsubmit="showSpinner()">
+    <input type="file" name="image" accept="image/*" required />
+    <button type="submit">Upload & Colorize</button>
+  </form>
+
+  {% if colorized_img %}
+    <div class="form-section">
+      <h2>🖼️ Colorized Preview</h2>
+      <img id="preview" src="{{ url_for('static', filename=colorized_img) }}" class="img-preview" width="400" />
+    </div>
+
+    <div class="edit-section">
+      <h2>🎛️ Adjust Settings (Live Preview)</h2>
+
+      <label>Brightness:
+        <input type="range" id="brightness" class="slider" min="-100" max="100" value="0" />
+      </label>
+
+      <label>Contrast:
+        <input type="range" id="contrast" class="slider" min="0.5" max="3.0" step="0.1" value="1.0" />
+      </label>
+
+      <label>Border Color:
+        <input type="color" id="border_color" value="#000000" />
+      </label>
+    </div>
+
+    <div class="btn-section">
+      <button id="downloadColorized">⬇️ Download Colorized</button>
+      <button id="downloadEdited" class="btn-secondary">⬇️ Download Edited</button>
+    </div>
+  {% endif %}
+
+  <!-- Spinner -->
+  <div class="overlay" id="overlay"></div>
+  <div id="spinner"><div class="spinner-border"></div></div>
+
+  <script>
+    const brightnessInput = document.getElementById('brightness');
+    const contrastInput = document.getElementById('contrast');
+    const borderColorInput = document.getElementById('border_color');
+    const previewImg = document.getElementById('preview');
+
+    let timer;
+    const debounce = (func, delay = 300) => {
+      clearTimeout(timer);
+      timer = setTimeout(func, delay);
+    };
+
+    const updatePreview = () => {
+      const brightness = brightnessInput.value;
+      const contrast = contrastInput.value;
+      const border_color = borderColorInput.value;
+
+      showSpinner();
+
+      fetch('/live-edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ brightness, contrast, border_color })
+      })
+      .then(response => response.blob())
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        previewImg.src = url;
+        hideSpinner();
+      })
+      .catch(() => {
+        alert("Error updating image");
+        hideSpinner();
+      });
+    };
+
+    brightnessInput?.addEventListener('input', () => debounce(updatePreview));
+    contrastInput?.addEventListener('input', () => debounce(updatePreview));
+    borderColorInput?.addEventListener('input', updatePreview);
+
+    document.getElementById('downloadColorized')?.addEventListener('click', () => {
+      window.open('/download/colorized', '_blank');
+    });
+
+    document.getElementById('downloadEdited')?.addEventListener('click', () => {
+      const brightness = brightnessInput.value;
+      const contrast = contrastInput.value;
+      const border_color = borderColorInput.value;
+      const url = `/download/edited?brightness=${brightness}&contrast=${contrast}&border_color=${encodeURIComponent(border_color)}`;
+      window.open(url, '_blank');
+    });
+
+    function showSpinner() {
+      document.getElementById('overlay').style.display = 'block';
+      document.getElementById('spinner').style.display = 'block';
+    }
+
+    function hideSpinner() {
+      document.getElementById('overlay').style.display = 'none';
+      document.getElementById('spinner').style.display = 'none';
+    }
+  </script>
+</body>
+</html>
